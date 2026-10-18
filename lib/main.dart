@@ -43,14 +43,40 @@ class PeoplePage extends StatefulWidget { const PeoplePage({super.key}); @overri
 class _PeoplePageState extends State<PeoplePage> {
   final List<Person> people = [];
   bool loading = true;
+  bool loadError = false;
   String query = '';
   @override void initState() { super.initState(); _load(); }
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
+  
+Future<void> _load() async {
+  try {
+    final prefs = await SharedPreferences.getInstance()
+        .timeout(const Duration(seconds: 10));
+
     final raw = prefs.getString('uravu_people_v1');
-    if (raw != null) { try { people.addAll((jsonDecode(raw) as List).map((e) => Person.fromJson(Map<String,dynamic>.from(e)))); } catch (_) {} }
-    if (mounted) setState(() => loading = false);
+
+    if (raw != null) {
+      try {
+        people.addAll(
+          (jsonDecode(raw) as List).map(
+            (e) => Person.fromJson(
+              Map<String, dynamic>.from(e),
+            ),
+          ),
+        );
+      } catch (_) {
+        // சேமித்த தகவலில் பிழை இருந்தாலும்
+        // செயலி திறப்பதைத் தடுக்க வேண்டாம்.
+      }
+    }
+  } catch (_) {
+    loadError = true;
+  } finally {
+    if (mounted) {
+      setState(() => loading = false);
+    }
   }
+}
+
   Future<void> _save() async { final p = await SharedPreferences.getInstance(); await p.setString('uravu_people_v1', jsonEncode(people.map((e) => e.toJson()).toList())); }
   String? _personName(String? id) { if (id == null) return null; for (final p in people) { if (p.id == id) return p.name; } return null; }
   Future<void> _add() async { final result = await Navigator.push<Person>(context, MaterialPageRoute(builder: (_) => PersonForm(allPeople: people))); if (result != null) { setState(() => people.add(result)); await _save(); } }
